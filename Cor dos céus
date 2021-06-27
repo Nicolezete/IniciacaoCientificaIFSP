@@ -1,0 +1,218 @@
+/*****************************************************************
+ *	Projeto: [Iniciação Científica] Protótipo - Cor dos Céus
+ *  
+ *  Integrantes:
+ *  • Isabelle Furman (SP3023133)
+ *	• Katharine Rodrigues (SP302718X)
+ *	• Nicole Rodrigues (SP3023087)
+ *	• Tiago Cunha (SP3026892)
+ *	• Vitor dos Santos (SP3028747)
+ *	
+ *	Este programa recebe a informação do potenciômetro
+ *	principal e a converte para a exibição do tempo relativo
+ *	ao período de rotação de cada planeta do Sistema Solar
+ *	no LCD, e a cor do céu correspondente à duração do dia
+ *	e ao planeta escolhido, definido pelo botão.
+ *  
+ *	Função dos componentes para o usuário
+ *	• LED RGB: cor do céu;
+ *	• LEDs monocromáticos: planeta escolhido;
+ *	• LCD: horário;
+ *	• Lâmpada: dia/noite.
+ *	
+ *	RGB / Duração da rotação completa em cada planeta
+ *	• (000, 000, 000) Mercúrio: 58 dias e 16 horas terrestres;
+ *	• (255, 255, 224) Vênus: 243 dias terrestres;
+ *	• (135, 206, 235) Terra: 24 horas;
+ *	• (255, 203, 219) Marte: 1 dia e 1 hora terrestre;
+ *	• (204, 204, 000) Júpiter: 10 horas terrestres;
+ *	• (252, 252, 252) Saturno: 11 horas terrestres;
+ *	• (000, 255, 255) Urano: 17 horas terrestres;
+ *	• (000, 000, 139) Netuno: 16 horas terrestres.
+ *	
+ *	Acima, conectado ao fio amarelo: Potenciômetro de Contraste.
+ *	Abaixo, conectado ao fio rosa: Potenciômetro Principal.
+ *	
+ *****************************************************************/
+
+/* Cabeçalho */
+
+//Inclusão da biblioteca para uso do LCD
+#include <LiquidCrystal.h>
+
+//Declaração das portas do LCD
+LiquidCrystal lcd(2, 3, 4, 5, 6, 7);
+
+//Declaração das constantes das portas
+const int pinoBotao = A0, pinoPot = A1, pinoLampada = A2;
+const int pinoLatch = 8, pinoData = 12, pinoClock = 13;
+const int pinoR = 9, pinoG = 10, pinoB = 11;
+
+//Declaração das variáveis globais
+bool estadoBotao;
+int planeta = 0, anterior = 0;
+int valorPot, auxiliar;
+int total, unidadeA, unidadeB;
+byte memoria = 0b10000000;
+
+//Declaração das rotinas
+void totalPlaneta(int maxPlaneta);
+void saidaRGB(int maxR, int maxG, int maxB);
+
+/* Setup - Inicialização das portas e LCD */
+void setup() {
+  pinMode(pinoBotao, INPUT);
+  pinMode(pinoPot, INPUT);
+  
+  pinMode(pinoLatch, OUTPUT);
+  pinMode(pinoData, OUTPUT);
+  pinMode(pinoClock, OUTPUT);
+  
+  pinMode(pinoR, OUTPUT);
+  pinMode(pinoG, OUTPUT);
+  pinMode(pinoB, OUTPUT);
+  
+  lcd.begin(16, 2);
+}
+
+/* Loop - Principal */
+void loop() {
+  
+  //Leitura digital do botão
+  estadoBotao = digitalRead(pinoBotao);
+  
+  //Blocos condicionais para atualização da variável planeta
+  if (estadoBotao == HIGH && planeta == anterior) {
+    lcd.clear();
+    
+    memoria >>= 1;
+    
+    if (planeta < 7)
+      planeta++;
+    else {
+      planeta = 0;
+      
+      bitSet(memoria, 7);
+    }
+  }
+  else if (estadoBotao == LOW && planeta != anterior){
+    anterior = planeta;
+    
+    digitalWrite(pinoR, LOW);
+    digitalWrite(pinoG, LOW);
+    digitalWrite(pinoB, LOW);
+  }
+  
+  //Atualização e saída dos dados na memória do circuito integrado (CI74HC595)
+  digitalWrite(pinoLatch, LOW);
+  shiftOut(pinoData, pinoClock, LSBFIRST, memoria);
+  digitalWrite(pinoLatch, HIGH);
+  
+  //Leitura do potenciômetro principal e manipulação para saída
+  valorPot = analogRead(pinoPot);
+  auxiliar = 511 - abs(valorPot - 512);
+  
+  //Saída para a lâmpada
+  analogWrite(pinoLampada, map(auxiliar, 0, 511, 0, 255));
+  
+  //Switch Case que determina a saída de cada planeta para o LCD e LED RGB
+  switch (planeta) {
+    case 0: //Mercúrio
+  	  totalPlaneta(1407);
+  	  /* Obs.: Como não há atmosfera em Mercúrio, o céu se encontra
+         sempre escuro e, portanto, o LED RGB permanece desligado. */
+  	  break;
+      
+    case 1: //Vênus
+      totalPlaneta(5831);
+      saidaRGB(255, 255, 224);
+      break;
+      
+    case 2: //Terra
+      totalPlaneta(1439);
+      saidaRGB(135, 206, 235);
+      break;
+      
+    case 3: //Marte
+      totalPlaneta(1499);
+      saidaRGB(255, 203, 219);
+      break;
+      
+    case 4: //Júpiter
+      totalPlaneta(599);
+      saidaRGB(204, 204, 0);
+      break;
+      
+    case 5: //Saturno
+      totalPlaneta(659);
+      saidaRGB(252, 252, 252);
+      break;
+      
+    case 6: //Urano
+      totalPlaneta(1019);
+      saidaRGB(0, 255, 255);
+      break;
+      
+    case 7: //Netuno
+      totalPlaneta(959);
+      saidaRGB(0, 0, 139);
+      break;
+  }
+  
+  //Manipulação da saída no LCD
+  if (planeta == 0 || planeta == 1) { //Formato 0 e 1: dias e horas
+    unidadeA = total / 24;
+	unidadeB = total - (unidadeA * 24);
+    
+    lcd.setCursor(3, 0);
+    
+    if (unidadeA < 100)
+      lcd.print(" ");
+    if (unidadeA < 10)
+      lcd.print(" ");
+	lcd.print(unidadeA);
+	lcd.print(" dias e ");
+    
+    lcd.setCursor(4, 1);
+    
+    if (unidadeB < 10)
+      lcd.print(" ");
+	lcd.print(unidadeB);
+	lcd.print(" horas");
+  }
+  else if (planeta >=2 && planeta <= 7) { //Formato 2 a 7: horas e minutos
+    unidadeA = total / 60;
+	unidadeB = total - (unidadeA * 60);
+    
+    lcd.setCursor(3, 0);
+    
+    if (unidadeA < 10)
+      lcd.print("0");
+	lcd.print(unidadeA);
+    lcd.print(" horas");
+    lcd.print(" ");
+	lcd.print("e");
+    
+    lcd.setCursor(3, 1);
+    
+    if (unidadeB < 10)
+      lcd.print("0");
+	lcd.print(unidadeB);
+    lcd.print(" minutos");
+  }
+  
+  delay(15);
+}
+
+/* totalPlaneta: Rotina que realiza a conversão do potenciômetro
+   para o total de possibilidades de horário para impressão no LCD */
+void totalPlaneta(int maxPlaneta) {
+  total = map(valorPot, 0, 1023, 0, maxPlaneta);
+}
+
+/* saidaRGB: Rotina que executa a saída para o LED RGB */
+void saidaRGB(int maxR, int maxG, int maxB) {
+  analogWrite(pinoR, map(auxiliar, 0, 511, 0, maxR));
+  analogWrite(pinoG, map(auxiliar, 0, 511, 0, maxG));
+  analogWrite(pinoB, map(auxiliar, 0, 511, 0, maxB));
+}
